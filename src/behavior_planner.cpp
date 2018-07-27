@@ -4,9 +4,16 @@
 
 using namespace std;
 
-Vehicle::Vehicle(double s, double s_dot, double d, double d_dot, double s_dot_dot)
+Vehicle::Vehicle(double s, double s_dot, double s_dot_dot, double d, double d_dot, double d_dot_dot)
 {
-	vehicles[ego_id] = {s,s_dot,s_dot_dot, d,d_dot};
+	double acc_s = s_dot_dot;
+	if(s_dot == 0)
+	{
+		double velocity = min(MAX_ACCELERATION * dt, MAX_SPEED);
+		acc_s = (velocity - 0)/dt;
+	}
+
+	vehicles[ego_id] = {s,s_dot, acc_s, d,d_dot, d_dot_dot};
 }
 
 Vehicle::~Vehicle(){}
@@ -196,6 +203,7 @@ vector<vector<double>> FSM::next_state(Vehicle &vehicle, string current_state)
 // Predict the next state for ego vehicle using find_goal_pose for every successor and then find the cost for this movement using cost functions. 
 
 // TO DO:
+// 0. Decide on Code exectution flowchart.
 // 1. Check the output of the code written so far by giving inputs from the simulator.
 // 2. Implement cost functions.
 // 3. Decide how to go from KL-> LCL in one code cycle.

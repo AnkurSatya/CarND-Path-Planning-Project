@@ -22,13 +22,15 @@ class Vehicle
 {
 public:
 	//Constructor is used for variable initializing and configuring the ego vehicle state.
-	Vehicle(double s, double s_dot, double d, double d_dot, double s_dot_dot = MAX_ACCELERATION);
+	// Vehicle(double s, double s_dot, double s_dot_dot, double d, double d_dot, double d_dot_dot);
+	Vehicle(double s, double s_dot, double s_dot_dot, double d, double d_dot, double d_dot_dot);
 	virtual ~Vehicle();
-	//includes id, s, s_dot,s_dot_dot d, d_dot.
+	//includes id, s, s_dot,s_dot_dot, d, d_dot, d_dot_dot.
 	map<int, vector<double>> vehicles;
 	// contains the predicted state of the all the vehicles except for the ego vehicle.
 	map<int, vector<double>> predictions;
-	// predicts the states of all the vehicles except for the ego vehicle.
+	
+	// predicts t0e states of all the vehicles except for the ego vehicle.
 	void predict();
 	int find_vehicle_ahead(int target_lane);
 	int find_vehicle_behind(int target_lane);
