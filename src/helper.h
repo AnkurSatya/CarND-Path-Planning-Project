@@ -7,7 +7,6 @@ using namespace std;
 constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
-int count2  = 0;
 
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
@@ -188,8 +187,21 @@ vector<double> getF_velocity(double x, double y, double theta, double v_x, doubl
 	double waypoints_heading = atan2((n_wp_y - p_wp_y), (n_wp_x - p_wp_x));
 	double angle = fabs(waypoints_heading - theta);//angle between the vehicle heading and the vector connecting the previous and the next waypoints.
 	// angle = min(2*pi() - angle, angle);
-	double velocity = pow(v_x*v_x, v_y*v_y);
+	double velocity = pow(v_x*v_x + v_y*v_y, 0.5);
 	double s_dot = velocity * cos(angle);
 	double d_dot = velocity * sin(angle);
 	return {s_dot, d_dot};
+}
+
+vector<double> generate_xy_for_trajectory(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+{
+	//T represents the time for completing this trajectory.
+	double s = 0.0;
+	double d = 0.0;
+	for(int i = 0; i<coeffs[0].size(); i++)
+	{
+		s+= coeffs[0][i] * pow(T,i);
+		d+= coeffs[1][i] * pow(T,i);
+	}
+	return getXY(s, d, maps_s, maps_x, maps_y);
 }

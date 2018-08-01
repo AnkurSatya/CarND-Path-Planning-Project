@@ -7,8 +7,10 @@
 #include "json.hpp"
 #include <ctime>
 #include <chrono>
+#include <thread> //For time.sleep()
 #include "helper.h"
 #include "behavior_planner.h"
+#include "trajectory_planner.h"
 
 using namespace std;
 
@@ -90,43 +92,136 @@ int main() {
 
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];//returns a vector of strings
+            cout<<"previous path size - "<<previous_path_x.size()<<endl;
             
-            
-            if(previous_path_x.size() == 0 && car_speed == 0) 
-            {
-              cout<<"In here 1 - "<<'\n';
-              vector<double> frenet_vel = getF_velocity(car_x, car_y, car_yaw, car_speed * cos(car_yaw), car_speed * sin(car_yaw), map_waypoints_x, map_waypoints_y);
-              //creating a vehicle object and setting up the ego vehicle.
-              Vehicle vehicle(car_s, frenet_vel[0], 0, car_d, frenet_vel[1], 0);//s, s_dot, s_dot_dot, d, d_dot, d_dot_dot.
+            //Declaring vectors to keep the latest state, at time when ego vehicle has covered the previous trajectory, of the vehicles.
+            //These vectors will be used to feed the state of the vehicles to the behavior planner and trajectory generator.
 
+            vector<double> latest_ego_state;
+            vector<vector<double>> latest_sensor_fusion;
+
+            // 1. Modifying the data from the simulator to store in the vehicle class.
+            
+            // 1.a. When the vehicle starts moving from rest.
+            if((previous_path_x.size() == 0 && car_speed == 0) || (previous_path_x.size() == 0))
+            {
+              vector<double> frenet_vel = getF_velocity(car_x, car_y, car_yaw, car_speed * cos(car_yaw), car_speed * sin(car_yaw), map_waypoints_x, map_waypoints_y);
+              latest_ego_state = {car_s, frenet_vel[0], 0, car_d, frenet_vel[1], 0};
+              //To filter out the vehicles which are far away from the ego vehicle and those giving back abrupt d values.
+              for(int i = 0;i<sensor_fusion.size(); i++)
+              {
+                // cout<<"Vehicle - "<<sensor_fusion[i][0]<<", s-> "<<sensor_fusion[i][5]<<", d-> "<<sensor_fusion[i][6]<<endl;
+                if(sensor_fusion[i][6] > 13.0 || sensor_fusion[i][6] < 0.0 || fabs(double(sensor_fusion[i][5]) - latest_ego_state[0]) > 1000) continue; 
+                latest_sensor_fusion.push_back(sensor_fusion[i]);
+              }
+            }
+
+            //1.b. Vehicle already in motion. 
+            else
+            {
+              // std::this_thread::sleep_for(std::chrono::milliseconds(6000));
+
+              // All the below values are under the assuming the current position is the goal position from the previous state.
+              int last_index = previous_path_x.size() - 1;
+              double latest_x = previous_path_x[last_index];
+              double latest_y = previous_path_y[last_index];
+              double pen_x = car_x;//penultimate x value in the previous_path_x.
+              double pen_y = car_y;
+              if(previous_path_x.size() > 1)
+              {
+                pen_x = previous_path_x[last_index - 1];
+                pen_y = previous_path_y[last_index - 1];
+              }
+              double latest_velocity = distance(latest_x, latest_y, pen_x, pen_y)/0.02;
+
+              double pen_velocity = latest_velocity;
+              if(previous_path_x.size() == 2)
+              {
+                pen_velocity = distance(pen_x, pen_y, car_x, car_y)/0.02;
+              }
+              else if(previous_path_x.size() >2)
+              {
+                pen_velocity = distance(pen_x, pen_y, previous_path_x[last_index - 2], previous_path_y[last_index - 2])/0.02;
+              }
+              double latest_acceleration = (latest_velocity - pen_velocity)/0.02;
+              double latest_yaw = atan2(latest_y - pen_y, latest_x - pen_x);
+
+              vector<double> frenet_vel = getF_velocity(latest_x, latest_y, latest_yaw, latest_velocity*cos(latest_yaw), latest_velocity * sin(latest_yaw), map_waypoints_x, map_waypoints_y);
+              latest_ego_state = {end_path_s, frenet_vel[0], latest_acceleration, end_path_d, frenet_vel[1], 0.0};
+
+              //Now we will predict the states of the traffic vehicles at the time when the ego vehicle has completed the last trajectory.
+
+              double delta_t = previous_path_x.size() * 0.02;//time when trajectory is completed - present time.
               for(int i = 0; i<sensor_fusion.size(); i++)
               {
-                vector<double> l = sensor_fusion[i];
-                vector<double> traffic_frenet_vel = getF_velocity(l[1], l[2], atan2(l[4], l[3]), l[3], l[4], map_waypoints_x, map_waypoints_y);
-                vehicle.vehicles[l[0]] = {l[5], traffic_frenet_vel[0], 0, l[6], traffic_frenet_vel[1], 0};
-              }
-              cout<<"vehicle 5 s_dot -> "<<vehicle.vehicles.find(5)->second[1]<<'\n';
-            }
-            // else
-            // {
-            //   for(int i = 0; i<previous_path_x.size(); i++)
-            //   {
+                if(sensor_fusion[i][6] > 13.0 || sensor_fusion[i][6] < 0.0 || fabs(double(sensor_fusion[i][5]) - latest_ego_state[0]) > 1000) continue; 
+                vector<double> l  = sensor_fusion[0];
+                l[1]+= l[3]*delta_t;
+                l[2]+= l[4]*delta_t;
 
+                vector<double> frenet_coordinates = getFrenet(l[1], l[2], atan2(l[4], l[3]), map_waypoints_x, map_waypoints_y);
+                l[5] = frenet_coordinates[0];
+                l[6] = frenet_coordinates[1];
+                latest_sensor_fusion.push_back(l);
+              }
+            }
+
+            // 2. Initializing the map in the vehicle class which stores state information of all the vehicles.
+            
+            Vehicle vehicle(latest_ego_state);//s, s_dot, s_dot_dot, d, d_dot, d_dot_dot.
+            
+            for(int i = 0; i<latest_sensor_fusion.size(); i++)
+            {
+              vector<double> l = latest_sensor_fusion[i];//id, x, y, vx, vy, s, d.
+              vector<double> traffic_frenet_vel = getF_velocity(l[1], l[2], atan2(l[4], l[3]), l[3], l[4], map_waypoints_x, map_waypoints_y);
+              vehicle.vehicles.insert(pair<int, vector<double>>(l[0],{l[5], traffic_frenet_vel[0], 0, l[6], traffic_frenet_vel[1], 0}));
+            }
+
+            // 3. Creating a finite state machine and  deciding the next vehicle state based on the predictions.
+            
+            FSM fsm;
+            vector<vector<double>> trajectory = fsm.next_state(vehicle, "KL");
+
+            // 4. Generating a JMT between the start and goal states from the next state().
+            double time_for_maneuver = 2.0;// 1.5 seconds for following the trajectory. 
+            generate_trajectory traj(time_for_maneuver);
+            vector<vector<double>> coeffs = traj.generate_JMT(trajectory);
+
+            // for(int i = 0; i<coeffs.size(); i++)
+            // {
+            //   cout<<" row - "<<endl;
+            //   for(int j = 0; j<coeffs[0].size(); j++)
+            //   {
+            //     cout<<"Coeffs - "<<coeffs[i][j]<<endl;
             //   }
             // }
 
-          	json msgJson;
+            // 5. creating waypoints on the above trajectory for the vehicle to follow.
 
-          	vector<double> next_x_vals;
-          	vector<double> next_y_vals;
+            double shortest_distance = distance(trajectory[0][0], trajectory[0][3], trajectory[1][0], trajectory[1][3]);
+            int num_waypoints = 40;
+            
+            vector<double> next_x_vals;
+            vector<double> next_y_vals;
 
-          	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+            for(int i = 1; i<=num_waypoints; i++)
+            {
+              // double t = double(i)/double(num_waypoints);
+              double t = i * 0.05;
+              vector<double> cartesian = generate_xy_for_trajectory(coeffs, t, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              next_x_vals.push_back(cartesian[0]);
+              next_y_vals.push_back(cartesian[1]);
+              // cout<<"X - "<<cartesian[0]<<endl;
+              // cout<<"Y - "<<cartesian[1]<<endl;
+              
+            }
+
+            json msgJson;            
           	msgJson["next_x"] = next_x_vals;
           	msgJson["next_y"] = next_y_vals;
 
           	auto msg = "42[\"control\","+ msgJson.dump()+"]";
 
-          	//this_thread::sleep_for(chrono::milliseconds(1000));
           	ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {

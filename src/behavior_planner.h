@@ -7,34 +7,36 @@
 #include <map>
 
 using namespace std;
+
 static int ego_id = -1;
 static int d_min = 0;
 static int d_max = 2;
+static int NUM_LANES = 3;
 static map<string, int> stoi_state = {{"KL", 0}, {"PLCL", -1}, {"LCL", -1}, {"PLCR", 1}, {"LCR", 1}};
 static double dt = 0.5;//500ms
-static double SEARCH_DISTANCE= 50.0;//Search distance for the vehicles in a lane. It decides whether to take a vehicle in consideration or not.
-static double BUFFER_DISTANCE = 3.0;//Distance to maintain between the vehicles along the heading.
-static double MAX_SPEED = 50.0;//in MPH.
-static double MAX_ACCELERATION = 10.0;//in m/s^2.
-
+static double SEARCH_DISTANCE= 50.0;//(in meters) Search distance for the vehicles in a lane. It decides whether to take a vehicle in consideration or not.
+static double BUFFER_DISTANCE = 3.0;//(in meters) Distance to maintain between the vehicles along the heading.
+static double MAX_SPEED = (50.0 * 1.60934 * 5.0/18.0);//in m/s.
+static double MAX_ACCELERATION = 10;//in m/s^2.
+static double MAX_COST = 1e10;
 
 class Vehicle
 {
 public:
 	//Constructor is used for variable initializing and configuring the ego vehicle state.
 	// Vehicle(double s, double s_dot, double s_dot_dot, double d, double d_dot, double d_dot_dot);
-	Vehicle(double s, double s_dot, double s_dot_dot, double d, double d_dot, double d_dot_dot);
+	Vehicle(vector<double> ego_state);
 	virtual ~Vehicle();
 	//includes id, s, s_dot,s_dot_dot, d, d_dot, d_dot_dot.
 	map<int, vector<double>> vehicles;
 	// contains the predicted state of the all the vehicles except for the ego vehicle.
 	map<int, vector<double>> predictions;
-	
+
 	// predicts t0e states of all the vehicles except for the ego vehicle.
 	void predict();
 	int find_vehicle_ahead(int target_lane);
 	int find_vehicle_behind(int target_lane);
-	vector<double> get_kinematics(Vehicle vehicle, int target_lane);
+	vector<double> get_kinematics(Vehicle &vehicle, int target_lane);
 };
 
 class FSM
