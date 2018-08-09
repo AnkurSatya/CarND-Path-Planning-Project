@@ -17,7 +17,7 @@ double sigmoid(double x)
 //cost for not driving at the maximum possible traffic speed and not driving in the fastest lane.
 double inefficiency_cost(Vehicle &vehicle)
 {
-	if(vehicle.predictions.count(ego_id) == 0) return MAX_COST;//When a successor of a state leads to an infeasible trajectory.
+	// if(vehicle.predictions.count(ego_id) == 0) return MAX_COST;//When a successor of a state leads to an infeasible trajectory.
 
 	vector<double> lane_speed(NUM_LANES,-1.0);
 	map<int, vector<double>>::iterator it = vehicle.predictions.begin();

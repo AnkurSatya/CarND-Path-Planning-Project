@@ -1,6 +1,7 @@
 #include "behavior_planner.h"
 #include "behavior_planner_costs.h"
 #include <functional>
+#include <typeinfo>
 
 using namespace std;
 
@@ -20,8 +21,9 @@ Vehicle::~Vehicle(){}
 
 FSM::FSM() 
 {
-	current_state = "KL";//Initial value for state - Keep Lane
-	state_graph["KL"] = {"KL","PLCL","PLCR"};
+	// current_state = "KL";//Initial value for state - Keep Lane
+	// state_graph["KL"] = {"KL","PLCL","PLCR"};
+	state_graph["KL"] = {"KL"};
 	state_graph["PLCL"] = {"KL","LCL"};
 	state_graph["LCL"] = {"KL","PLCL"};//back to back lane change can be done as a possible next state of lane change left is prepare lane change left.
 	state_graph["PLCR"] = {"KL","LCR"};
@@ -86,6 +88,8 @@ vector<double> Vehicle::get_kinematics(Vehicle &vehicle, int target_lane)
 	int vehicle_ahead_id = find_vehicle_ahead(target_lane);
 	int vehicle_behind_id = find_vehicle_behind(target_lane);
 
+	// cout<<"Vehicle Ahead/Behind ID "<<vehicle_ahead_id<<", "<<vehicle_behind_id<<endl;
+
 	vector<double> new_kinematics;
 	vector<double> current_kinematics = vehicle.vehicles.find(ego_id)->second;
 
@@ -118,7 +122,7 @@ vector<double> Vehicle::get_kinematics(Vehicle &vehicle, int target_lane)
 		new_velocity = 0.0;
 		s_dot_dot = 0.0;
 	}
-	else s_dot_dot = (new_velocity - s_dot)/dt;
+	else s_dot_dot = min(MAX_ACCELERATION,(new_velocity - s_dot)/dt);
 
 	s += new_velocity * dt + 0.5 * s_dot_dot * dt * dt;
 	// d+= d_dot * dt + 0.5 * s_dot_dot * dt *dt;//D update is not necessary as behavior planner is used to predict the end states not the trajctory which means the vehicle will always be heading towards the lane direction. 
@@ -130,9 +134,10 @@ void FSM::find_goal_pose(Vehicle &vehicle, string start_state, string goal_state
 {
 	int target_lane;
 	target_lane = (vehicle.vehicles.find(ego_id)->second[3])/4 + stoi_state.find(goal_state)->second;
-	
-	if(target_lane < d_min || target_lane > d_max) return;
+	// cout<<"target_lane "<<target_lane<<endl;
 
+	if(target_lane < d_min || target_lane > d_max) return;
+	
 	vector<double> new_lane_kinematics = vehicle.get_kinematics(vehicle, target_lane);
 	if(goal_state.compare("KL") == 0)//KEEP LANE
 	{
@@ -166,7 +171,7 @@ void FSM::find_goal_pose(Vehicle &vehicle, string start_state, string goal_state
 	}
 }
 
-vector<vector<double>> FSM::next_state(Vehicle &vehicle, string current_state)
+vector<vector<double>> FSM::next_state(Vehicle &vehicle, string &current_state)
 {
 	vector<string> successors = state_graph.find(current_state)->second;
 	map<string, double>costs;//Map for storing costs for all the trajectories.
@@ -177,11 +182,19 @@ vector<vector<double>> FSM::next_state(Vehicle &vehicle, string current_state)
 	trajectory.push_back(vehicle.vehicles.find(ego_id)->second);
 
 	vehicle.predict();
+	// cout<<"In the next state function:"<<endl;
 
 	for(int i = 0; i<successors.size(); i++)
 	{	
 		string goal_state = successors[i];
+		// cout<<"Successor - "<<goal_state<<endl;
 		find_goal_pose(vehicle, current_state, goal_state);
+		if(vehicle.predictions.count(ego_id) == 0) 
+		{
+			// cout<<"Vehicle outside of the desired lanes."<<endl;
+
+			continue;
+		}
 		double total_cost = calculate_cost(vehicle);
 		if(total_cost < min_cost) 
 		{
@@ -192,15 +205,16 @@ vector<vector<double>> FSM::next_state(Vehicle &vehicle, string current_state)
 		costs[goal_state] = total_cost;
 		vehicle.predictions.erase(ego_id);
 	}
+	// cout<<"states cost -------------"<<endl;
+	// map<string,double>::iterator it = costs.begin();
+	// for(it; it != costs.end(); ++it)
+	// {
+	// 	// cout<<"State name, cost - "<<it->first<<", "<<it->second<<endl;
+	// }
+	// cout<<"current_state - "<<current_state<<endl;
+	// cout<<"Final state chosen - "<<min_cost_state<<endl;
+	if(costs.size() == 0) cout<<"All successors were evaluated to be infeasible. There is something wrong with the code."<<endl;
+	current_state = min_cost_state;
 	trajectory.push_back(min_cost_trajectory);
 	return trajectory;
 }
-		
-
-// Predict the next state for ego vehicle using find_goal_pose for every successor and then find the cost for this movement using cost functions. 
-
-// Problem - Max acceleration reached.
-// TO DO:
-// 0. Implement solution when s_dot != 0.
-// 1. There is no boundation on acceleration and jerk in the trajectory generated. Create multiple trajectories and choose the one with minimum average acceleration and jerk. Bound both AccT and AccN.
-// 2. Update the traffic vehicle selection search distance parameter to 100 meters. Add condition when vehicle.vehicles is empty as move with max speed in the same lane.

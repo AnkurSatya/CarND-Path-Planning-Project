@@ -1,6 +1,8 @@
 #include <vector>
+#include "constants.h"
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
+#include "spline/src/spline.h"
 using namespace std;
 
 // For converting back and forth between radians and degrees.
@@ -95,6 +97,62 @@ int NextWaypoint_alt(double x, double y, double theta, const vector<double> &map
 	return closestWaypoint;
  }
 
+tk::spline generate_spline(vector<double> x, vector<double> y)
+{
+	tk::spline x_to_y;
+	x_to_y.set_points(x, y);
+	return x_to_y;
+}
+
+bool sort_by_s(vector<double> i, vector<double> j){return (i[2] < j[2]);}
+
+void sort_map_waypoints(vector<double> &maps_x, vector<double> &maps_y, vector<double> &maps_s)
+{
+	vector<vector<double>> map_wps;
+	for(int i = 0; i<maps_x.size(); i++)
+	{
+		map_wps.push_back({maps_x[i], maps_y[i], maps_s[i]});
+	}
+	sort(map_wps.begin(), map_wps.end(), sort_by_s);
+
+	maps_x.clear();
+	maps_y.clear();
+	maps_s.clear();
+
+	for(int i = 0; i<map_wps.size(); i++)
+	{
+		maps_x.push_back(map_wps[i][0]);
+		maps_y.push_back(map_wps[i][1]);
+		maps_s.push_back(map_wps[i][2]);
+	}
+}
+void sort_map_waypoints(vector<double> &maps_x, vector<double> &maps_y, vector<double> &maps_s, vector<double>&maps_dx, vector<double> &maps_dy)
+{
+	vector<vector<double>> map_wps;
+
+	for(int i = 0; i<maps_x.size(); i++)
+	{
+		map_wps.push_back({maps_x[i], maps_y[i], maps_s[i], maps_dx[i], maps_dy[i]});
+	}
+	sort(map_wps.begin(), map_wps.end(), sort_by_s);
+
+	maps_x.clear();
+	maps_y.clear();
+	maps_s.clear();
+	maps_dx.clear();
+	maps_dy.clear();
+
+	for(int i = 0; i<map_wps.size(); i++)
+	{
+		maps_x.push_back(map_wps[i][0]);
+		maps_y.push_back(map_wps[i][1]);
+		maps_s.push_back(map_wps[i][2]);
+		maps_dx.push_back(map_wps[i][3]);
+		maps_dy.push_back(map_wps[i][4]);
+	}
+}
+
+
 // Transform from Cartesian x,y coordinates to Frenet s,d coordinates
 vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
 {
@@ -147,6 +205,7 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 // Transform from Frenet s,d coordinates to Cartesian x,y
 vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
 {
+	//This is a very poorly designed mathematical formulation. The approximation is not fixed and increases with the curvature, map waypoint and vehicle position. Problem can be solved by using splines to generate more waypoints.
 	int prev_wp = -1;
 
 	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
@@ -169,10 +228,21 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 	double y = seg_y + d*sin(perp_heading);
 
 	return {x,y};
-
 }
 
-//Transform the speed from Cartesian v_x, v_y to Frenet Coordinates v_s, v_d.
+// vector<double> getXY(double s, double d, vector<double> &maps_s, vector<double> &maps_x, vector<double> &maps_y, vector<double> &maps_dx, vector<double> &maps_dy)
+// {
+// 	sort_map_waypoints(maps_x, maps_y, maps_s, maps_dx, maps_dy);
+// 	tk::spline s_to_x = generate_spline(maps_s, maps_x);
+// 	tk::spline s_to_y = generate_spline(maps_s, maps_y);
+// 	tk::spline s_to_dx = generate_spline(maps_s, maps_dx);
+// 	tk::spline s_to_dy = generate_spline(maps_s, maps_dy);	
+// 	double x = s_to_x(s) + d*s_to_dx(s);
+// 	double y = s_to_y(s) + d*s_to_dy(s);
+// 	return {x,y};
+// }
+
+// Transform the speed from Cartesian v_x, v_y to Frenet Coordinates v_s, v_d.
 vector<double> getF_velocity(double x, double y, double theta, double v_x, double v_y, const vector<double> &maps_x, const vector<double> &maps_y)
 {
 	int n_wp = NextWaypoint_alt(x, y, theta, maps_x, maps_y);
@@ -186,22 +256,138 @@ vector<double> getF_velocity(double x, double y, double theta, double v_x, doubl
 
 	double waypoints_heading = atan2((n_wp_y - p_wp_y), (n_wp_x - p_wp_x));
 	double angle = fabs(waypoints_heading - theta);//angle between the vehicle heading and the vector connecting the previous and the next waypoints.
-	// angle = min(2*pi() - angle, angle);
+	angle = min(2*pi() - angle, angle);
 	double velocity = pow(v_x*v_x + v_y*v_y, 0.5);
 	double s_dot = velocity * cos(angle);
 	double d_dot = velocity * sin(angle);
 	return {s_dot, d_dot};
 }
 
-vector<double> generate_xy_for_trajectory(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+// vector<double> getF_velocity(double x, double y, double v_x, double v_y, const vector<double> &maps_x, const vector<double> &maps_y, const vector<double> &maps_dx, const vector<double> &maps_dy)
+// {
+// 	int closest_waypoint = ClosestWaypoint(x, y, maps_x, maps_y);
+// 	cout<<"closest_waypoint "<<closest_waypoint<<endl;
+// 	double d_x = maps_dx[closest_waypoint];//these are x and y components of a unit vector representing 'd' of frenet space.
+// 	double d_y = maps_dy[closest_waypoint];
+// 	cout<<"dx,dy "<<d_x<<'\t'<<d_y<<endl;
+// 	vector<double> s_unit_vector = {-d_y, d_x};
+// 	vector<double> d_unit_vector = {d_x, d_y};
+// 	double s_dot = v_x * s_unit_vector[0] + v_y * s_unit_vector[1];
+// 	double d_dot = v_x * d_unit_vector[0] + v_y * d_unit_vector[1];
+// 	// double s_dot = pow(v_x * v_x +v_y * v_y  - d_dot * d_dot, 0.5);
+// 	// cout<<"Printing car vx and vy "<<v_x<<'\t'<<v_y<<endl;
+// 	return {s_dot, d_dot};
+
+// }
+// vector<double> generate_xy_for_trajectory(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+// {
+// 	//T represents the time for completing this trajectory.
+// 	double s = 0.0;// s is not initialized with start_s because the coeffs already contain that information.
+// 	double d = 0.0;
+// 	for(int i = 0; i<coeffs[0].size(); i++)
+// 	{
+// 		s+= coeffs[0][i] * pow(T,i);
+// 		d+= coeffs[1][i] * pow(T,i);
+// 	}
+// 	// cout<<"s, d "<<s<<'\t'<<d<<endl;
+// 	vector<double> XY = getXY(s,d,maps_s, maps_x, maps_y);
+// 	// cout<<"get XY "<<XY[0]<<'\t'<<XY[1]<<endl;
+// 	return XY;
+// }
+
+vector<double> trajectory_vel_and_acc(vector<vector<double>> coeffs, double t)
 {
-	//T represents the time for completing this trajectory.
-	double s = 0.0;
-	double d = 0.0;
-	for(int i = 0; i<coeffs[0].size(); i++)
-	{
-		s+= coeffs[0][i] * pow(T,i);
-		d+= coeffs[1][i] * pow(T,i);
+	vector<double> c_s = coeffs[0];
+	vector<double> c_d = coeffs[1];
+
+	double s_velocity = c_s[1] + 2*c_s[2]*t + 3*c_s[3]*t*t + 4*c_s[4]*t*t*t + 5*c_s[5]*t*t*t*t;
+	double s_acceleration = 2*c_s[2] + 6*c_s[3]*t + 12*c_s[4]*t*t + 20*c_s[5]*t*t*t;
+
+	double d_velocity = c_d[1] + 2*c_d[2]*t + 3*c_d[3]*t*t + 4*c_d[4]*t*t*t + 5*c_d[5]*t*t*t*t;
+	double d_acceleration = 2*c_d[2] + 6*c_d[3]*t + 12*c_d[4]*t*t + 20*c_d[5]*t*t*t;
+
+	return{pow(s_velocity*s_velocity + d_velocity*d_velocity, 0.5), pow(s_acceleration*s_acceleration + d_acceleration*d_acceleration, 0.5)};
+}
+
+
+vector<vector<double>> upsample_map_waypoints(vector<double> maps_x, vector<double> maps_y, vector<double> maps_s)
+{
+	sort_map_waypoints(maps_x, maps_y, maps_s);
+	tk::spline s_to_x = generate_spline(maps_s, maps_x);
+	tk::spline s_to_y = generate_spline(maps_s, maps_y);
+
+	vector<double> x_upsampled, y_upsampled, s_upsampled;
+	for(double i = 0; i<=max_s; i++)// resampling every 1 meter.
+	{	
+		x_upsampled.push_back(s_to_x(i));
+		y_upsampled.push_back(s_to_y(i));
+		s_upsampled.push_back(double(i));
 	}
-	return getXY(s, d, maps_s, maps_x, maps_y);
+	return {x_upsampled, y_upsampled, s_upsampled};
+}
+
+
+vector<vector<double>> get_new_waypoints(vector<vector<double>> trajectory, vector<double> ego_state)
+{
+	//Testing for keep lane trajectory. That is why d consist of same values. And d velocity is assumed to be zero.
+	vector<double> start = trajectory[0];
+	vector<double> goal = trajectory[1];
+	// cout<<"goal d "<<goal[3]<<endl;
+
+	vector<double> s;
+	vector<double> d;
+
+	double delta_s = (goal[0] - start[0])/10;
+	for(double s_val = start[0]; s_val<=goal[0]; s_val+=delta_s)
+	{
+		s.push_back(s_val);
+		d.push_back(start[3]);
+	}
+
+	tk::spline path = generate_spline(s,d);
+
+	// path.set_points(s,d);
+
+	int num_waypoints = 50;
+	double s_increment = (goal[0] - start[0])/num_waypoints;
+
+	vector<double> s_waypoints;
+	vector<double> d_waypoints;
+
+	double prev_s = start[0];
+	double prev_velocity_s = ego_state[1];
+	double prev_acceleration = ego_state[2];
+	double t = 0.02;
+	if(prev_velocity_s == 0)
+	{
+		prev_acceleration = MAX_ACCELERATION;
+		prev_velocity_s = min(prev_acceleration * t, MAX_SPEED);
+		// prev_velocity_s = MAX_SPEED;
+	}
+	cout<<"------------------get new waypoints function-------------"<<endl;
+	// cout<<"prev velocity"<<prev_velocity_s<<endl;
+	double new_velocity_s;
+	double new_acceleration_s;
+
+	cout<<"----------New S and D---------"<<endl;
+	int count = 0;
+	while(prev_s < goal[0])
+	{
+		s_waypoints.push_back(prev_s);
+		d_waypoints.push_back(path(prev_s));
+
+		if(count<100)cout<<"s,d "<<prev_s<<'\t'<<path(prev_s)<<endl;
+		count++;
+		new_velocity_s+= prev_acceleration*t;
+		new_velocity_s = min(MAX_SPEED, new_velocity_s);
+		// new_velocity_s = MAX_SPEED;
+		new_acceleration_s = min(MAX_ACCELERATION, (new_velocity_s - prev_velocity_s)/t);
+
+		prev_s+= new_velocity_s*t + 0.5 * t * t * new_acceleration_s;
+		// prev_s+= new_velocity_s*t;
+		prev_velocity_s = new_velocity_s;
+	}
+
+	cout<<"no. of new waypoints - "<<s_waypoints.size()<<endl;
+	return {s_waypoints, d_waypoints};
 }

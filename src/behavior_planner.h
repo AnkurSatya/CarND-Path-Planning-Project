@@ -5,20 +5,9 @@
 #include <vector>
 #include <string>
 #include <map>
+#include "constants.h"
 
 using namespace std;
-
-static int ego_id = -1;
-static int d_min = 0;
-static int d_max = 2;
-static int NUM_LANES = 3;
-static map<string, int> stoi_state = {{"KL", 0}, {"PLCL", -1}, {"LCL", -1}, {"PLCR", 1}, {"LCR", 1}};
-static double dt = 0.5;//500ms
-static double SEARCH_DISTANCE= 50.0;//(in meters) Search distance for the vehicles in a lane. It decides whether to take a vehicle in consideration or not.
-static double BUFFER_DISTANCE = 3.0;//(in meters) Distance to maintain between the vehicles along the heading.
-static double MAX_SPEED = (50.0 * 1.60934 * 5.0/18.0);//in m/s.
-static double MAX_ACCELERATION = 10;//in m/s^2.
-static double MAX_COST = 1e10;
 
 class Vehicle
 {
@@ -52,7 +41,7 @@ public:
 	string current_state;
 
 	//returns the trajectory for transition to the next state to the Trajectory Planner Module.
-	vector<vector<double>> next_state(Vehicle &vehicle, string current_state);
+	vector<vector<double>> next_state(Vehicle &vehicle, string &current_state);
 
 	//Generates trajectory for transition to a input state. 
 	//Returns within the next_state function for cost evaluation.

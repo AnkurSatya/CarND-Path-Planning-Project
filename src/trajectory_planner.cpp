@@ -20,7 +20,7 @@ vector<vector<double>> generate_trajectory::generate_JMT(vector<vector<double>> 
 	   0, 1, 0, 0, 0, 0,
 	   0, 0, 2, 0, 0, 0,
 	   1, T, pow(T,2), pow(T,3), pow(T,4), pow(T,5),
-	   0, 1, 2*T, 3*pow(T,2), 4*pow(T,2), 5*pow(T,4),
+	   0, 1, 2*T, 3*pow(T,2), 4*pow(T,3), 5*pow(T,4),
 	   0, 0, 2, 6*T, 12*pow(T,2), 20*pow(T,3);
 
 	B<<initial_boundary_conditions[0], initial_boundary_conditions[1], initial_boundary_conditions[2], final_boundary_conditions[0], final_boundary_conditions[1], final_boundary_conditions[2];
@@ -43,7 +43,7 @@ vector<vector<double>> generate_trajectory::generate_JMT(vector<vector<double>> 
 	{
 		for(int j = 0; j<coeffs[0].size(); j++)
 		{
-			if(abs(coeffs[i][j]) < 0.0001) coeffs[i][j] = 0.0;
+			if(abs(coeffs[i][j]) < 0.000001) coeffs[i][j] = 0.0;
 		}
 	}
 	return coeffs;
