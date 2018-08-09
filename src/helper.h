@@ -279,35 +279,35 @@ vector<double> getF_velocity(double x, double y, double theta, double v_x, doubl
 // 	return {s_dot, d_dot};
 
 // }
-// vector<double> generate_xy_for_trajectory(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
-// {
-// 	//T represents the time for completing this trajectory.
-// 	double s = 0.0;// s is not initialized with start_s because the coeffs already contain that information.
-// 	double d = 0.0;
-// 	for(int i = 0; i<coeffs[0].size(); i++)
-// 	{
-// 		s+= coeffs[0][i] * pow(T,i);
-// 		d+= coeffs[1][i] * pow(T,i);
-// 	}
-// 	// cout<<"s, d "<<s<<'\t'<<d<<endl;
-// 	vector<double> XY = getXY(s,d,maps_s, maps_x, maps_y);
-// 	// cout<<"get XY "<<XY[0]<<'\t'<<XY[1]<<endl;
-// 	return XY;
-// }
-
-vector<double> trajectory_vel_and_acc(vector<vector<double>> coeffs, double t)
+vector<vector<double>> generate_JMT_waypoints(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
 {
-	vector<double> c_s = coeffs[0];
-	vector<double> c_d = coeffs[1];
-
-	double s_velocity = c_s[1] + 2*c_s[2]*t + 3*c_s[3]*t*t + 4*c_s[4]*t*t*t + 5*c_s[5]*t*t*t*t;
-	double s_acceleration = 2*c_s[2] + 6*c_s[3]*t + 12*c_s[4]*t*t + 20*c_s[5]*t*t*t;
-
-	double d_velocity = c_d[1] + 2*c_d[2]*t + 3*c_d[3]*t*t + 4*c_d[4]*t*t*t + 5*c_d[5]*t*t*t*t;
-	double d_acceleration = 2*c_d[2] + 6*c_d[3]*t + 12*c_d[4]*t*t + 20*c_d[5]*t*t*t;
-
-	return{pow(s_velocity*s_velocity + d_velocity*d_velocity, 0.5), pow(s_acceleration*s_acceleration + d_acceleration*d_acceleration, 0.5)};
+	//T represents the time for completing this trajectory.
+	double s = 0.0;// s is not initialized with start_s because the coeffs already contain that information.
+	double d = 0.0;
+	for(int i = 0; i<coeffs[0].size(); i++)
+	{
+		s+= coeffs[0][i] * pow(T,i);
+		d+= coeffs[1][i] * pow(T,i);
+	}
+	// cout<<"s, d "<<s<<'\t'<<d<<endl;
+	vector<double> XY = getXY(s,d,maps_s, maps_x, maps_y);
+	// cout<<"get XY "<<XY[0]<<'\t'<<XY[1]<<endl;
+	return {XY,{s,d}};
 }
+
+// vector<double> trajectory_vel_and_acc(vector<vector<double>> coeffs, double t)
+// {
+// 	vector<double> c_s = coeffs[0];
+// 	vector<double> c_d = coeffs[1];
+
+// 	double s_velocity = c_s[1] + 2*c_s[2]*t + 3*c_s[3]*t*t + 4*c_s[4]*t*t*t + 5*c_s[5]*t*t*t*t;
+// 	double s_acceleration = 2*c_s[2] + 6*c_s[3]*t + 12*c_s[4]*t*t + 20*c_s[5]*t*t*t;
+
+// 	double d_velocity = c_d[1] + 2*c_d[2]*t + 3*c_d[3]*t*t + 4*c_d[4]*t*t*t + 5*c_d[5]*t*t*t*t;
+// 	double d_acceleration = 2*c_d[2] + 6*c_d[3]*t + 12*c_d[4]*t*t + 20*c_d[5]*t*t*t;
+
+// 	return{pow(s_velocity*s_velocity + d_velocity*d_velocity, 0.5), pow(s_acceleration*s_acceleration + d_acceleration*d_acceleration, 0.5)};
+// }
 
 
 vector<vector<double>> upsample_map_waypoints(vector<double> maps_x, vector<double> maps_y, vector<double> maps_s)
@@ -327,67 +327,69 @@ vector<vector<double>> upsample_map_waypoints(vector<double> maps_x, vector<doub
 }
 
 
-vector<vector<double>> get_new_waypoints(vector<vector<double>> trajectory, vector<double> ego_state)
-{
-	//Testing for keep lane trajectory. That is why d consist of same values. And d velocity is assumed to be zero.
-	vector<double> start = trajectory[0];
-	vector<double> goal = trajectory[1];
-	// cout<<"goal d "<<goal[3]<<endl;
+// vector<vector<double>> get_new_waypoints(vector<vector<double>> trajectory, vector<double> ego_state)
+// {
+// 	//Testing for keep lane trajectory. That is why d consist of same values. And d velocity is assumed to be zero.
+// 	vector<double> start = trajectory[0];
+// 	vector<double> goal = trajectory[1];
+// 	// cout<<"goal d "<<goal[3]<<endl;
 
-	vector<double> s;
-	vector<double> d;
+// 	vector<double> s;
+// 	vector<double> d;
 
-	double delta_s = (goal[0] - start[0])/10;
-	for(double s_val = start[0]; s_val<=goal[0]; s_val+=delta_s)
-	{
-		s.push_back(s_val);
-		d.push_back(start[3]);
-	}
+// 	double delta_s = (goal[0] - start[0])/10;
+// 	for(double s_val = start[0]; s_val<=goal[0]; s_val+=delta_s)
+// 	{
+// 		s.push_back(s_val);
+// 		d.push_back(start[3]);
+// 	}
 
-	tk::spline path = generate_spline(s,d);
+// 	tk::spline path = generate_spline(s,d);
 
-	// path.set_points(s,d);
+// 	// path.set_points(s,d);
 
-	int num_waypoints = 50;
-	double s_increment = (goal[0] - start[0])/num_waypoints;
+// 	int num_waypoints = 50;
+// 	double s_increment = (goal[0] - start[0])/num_waypoints;
 
-	vector<double> s_waypoints;
-	vector<double> d_waypoints;
+// 	vector<double> s_waypoints;
+// 	vector<double> d_waypoints;
 
-	double prev_s = start[0];
-	double prev_velocity_s = ego_state[1];
-	double prev_acceleration = ego_state[2];
-	double t = 0.02;
-	if(prev_velocity_s == 0)
-	{
-		prev_acceleration = MAX_ACCELERATION;
-		prev_velocity_s = min(prev_acceleration * t, MAX_SPEED);
-		// prev_velocity_s = MAX_SPEED;
-	}
-	cout<<"------------------get new waypoints function-------------"<<endl;
-	// cout<<"prev velocity"<<prev_velocity_s<<endl;
-	double new_velocity_s;
-	double new_acceleration_s;
+// 	double prev_s = start[0];
+// 	double prev_velocity_s = ego_state[1];
+// 	double prev_acceleration = ego_state[2];
+// 	double t = 0.02;
+// 	if(prev_velocity_s == 0)
+// 	{
+// 		prev_acceleration = MAX_ACCELERATION;
+// 		prev_velocity_s = min(prev_acceleration * t, MAX_SPEED);
+// 		// prev_velocity_s = MAX_SPEED;
+// 	}
+// 	// cout<<"------------------get new waypoints function-------------"<<endl;
+// 	// cout<<"prev velocity"<<prev_velocity_s<<endl;
+// 	double new_velocity_s = prev_velocity_s;
+// 	double new_acceleration_s = prev_acceleration;
+// 	prev_s+=prev_velocity_s*t + 0.5*t*t*prev_acceleration;//So that the last iteration's goal value, which is start[0] here, is not added again.
 
-	cout<<"----------New S and D---------"<<endl;
-	int count = 0;
-	while(prev_s < goal[0])
-	{
-		s_waypoints.push_back(prev_s);
-		d_waypoints.push_back(path(prev_s));
+// 	// cout<<"----------New S and D---------"<<endl;
+// 	int count = 0;
+// 	while(prev_s < goal[0])
+// 	{
+// 		s_waypoints.push_back(prev_s);
+// 		d_waypoints.push_back(path(prev_s));
 
-		if(count<100)cout<<"s,d "<<prev_s<<'\t'<<path(prev_s)<<endl;
-		count++;
-		new_velocity_s+= prev_acceleration*t;
-		new_velocity_s = min(MAX_SPEED, new_velocity_s);
-		// new_velocity_s = MAX_SPEED;
-		new_acceleration_s = min(MAX_ACCELERATION, (new_velocity_s - prev_velocity_s)/t);
+// 		new_velocity_s+= prev_acceleration*t;
+// 		new_velocity_s = min(MAX_SPEED, new_velocity_s);
+// 		new_velocity_s = max(new_velocity_s, 0.2);
+// 		// cout<<"new velocity "<<new_velocity_s<<endl;
+// 		// new_velocity_s = MAX_SPEED;
+// 		new_acceleration_s = min(MAX_ACCELERATION, (new_velocity_s - prev_velocity_s)/t);
+// 		// cout<<"new acceleration "<<new_acceleration_s<<endl;
+// 		prev_s+= new_velocity_s*t + 0.5 * t * t * new_acceleration_s;
+// 		// prev_s+= new_velocity_s*t;
+// 		prev_velocity_s = new_velocity_s;
+// 		prev_acceleration = new_acceleration_s;
+// 	}
 
-		prev_s+= new_velocity_s*t + 0.5 * t * t * new_acceleration_s;
-		// prev_s+= new_velocity_s*t;
-		prev_velocity_s = new_velocity_s;
-	}
-
-	cout<<"no. of new waypoints - "<<s_waypoints.size()<<endl;
-	return {s_waypoints, d_waypoints};
-}
+// 	// cout<<"no. of new waypoints - "<<s_waypoints.size()<<endl;
+// 	return {s_waypoints, d_waypoints};
+// }

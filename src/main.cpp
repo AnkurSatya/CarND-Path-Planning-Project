@@ -69,6 +69,7 @@ int main() {
 
   vector<double> prev_s;
   vector<double> prev_d;
+  int path_size;
   string current_state = "KL";
 
   h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy, &current_state, &prev_s, &prev_d](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
@@ -96,7 +97,7 @@ int main() {
           	double car_yaw = j[1]["yaw"];//in degrees.
           	double car_speed = j[1]["speed"];
             car_speed = (car_speed * 1.60934 * 5.0/18.0);//converting MPH to m/s.
-            car_d = 10;
+            // car_d = 10;
             //Insert car's state as id, s, s_dot, d, d_dot.
 
           	// Previous path data given to the Planner
@@ -110,9 +111,10 @@ int main() {
           	auto sensor_fusion = j[1]["sensor_fusion"];//returns a vector of strings
 
             cout<<"-----------------"<<endl;
-            cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
+            cout<<"Current State - "<<current_state<<endl;
+            // cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
 
-            cout<<"car x, y, yaw "<<car_x<<'\t'<<car_y<<'\t'<<car_yaw<<endl;
+            // cout<<"car x, y, yaw "<<car_x<<'\t'<<car_y<<'\t'<<car_yaw<<endl;
             // if(previous_path_x.size() == 0)
             // {
             //   vector<double> xy = getXY(139.622, 6.16483, map_waypoints_s, map_waypoints_x, map_waypoints_y);
@@ -131,22 +133,22 @@ int main() {
             vector<vector<double>> latest_sensor_fusion;
             vector<double> next_x_vals;
             vector<double> next_y_vals;
-            
-            int prev_size = previous_path_x.size();
-            int num_waypoints = 50;
-            int num_waypoints_from_previous_path = prev_size;            
-            // int num_waypoints_from_previous_path = min(40, prev_size);
-            cout<<"Num waypoints from previous path - "<<num_waypoints_from_previous_path<<endl;
+            vector<double> temp_s;
+            vector<double> temp_d;
 
-            cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
+            int prev_size = previous_path_x.size();
+            int num_waypoints = 100;
+            // int num_waypoints_from_previous_path = prev_size;            
+            int num_waypoints_from_previous_path = min(30, prev_size);
+            // cout<<"Num waypoints from previous path - "<<num_waypoints_from_previous_path<<endl;
+
+            // cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
             // 1. Modifying the data from the simulator to store in the vehicle class.
             
                 // 1.a. When the vehicle starts moving from rest.
             if((previous_path_x.size() == 0 && car_speed == 0) || (previous_path_x.size() == 0))
             {
-              // vector<double> frenet_vel = getF_velocity(car_x, car_y, car_speed * cos(car_yaw), car_speed * sin(car_yaw), map_waypoints_x, map_waypoints_y, map_waypoints_dx, map_waypoints_dy);
-              vector<double> frenet_vel = getF_velocity(car_x, car_y, car_yaw, car_speed * cos(car_yaw), car_speed*sin(car_yaw), map_waypoints_x, map_waypoints_y);
-              latest_ego_state = {car_s, frenet_vel[0], 0, car_d, frenet_vel[1], 0};
+              latest_ego_state = {car_s, 0, 0, car_d, 0, 0};
 
               //To filter out the vehicles which are far away from the ego vehicle and those giving back abrupt d values.
               for(int i = 0;i<sensor_fusion.size(); i++)
@@ -159,59 +161,53 @@ int main() {
             //1.b. Vehicle already in motion. 
             else
             {
-              cout<<"-----------Debugging else condition of previous path size------------------"<<endl;            
-              // cout<<"------------------Previous path starts----------------------"<<endl;
+              // cout<<"-----------Debugging else condition of previous path size------------------"<<endl;            
               for(int i = 0; i<num_waypoints_from_previous_path; i++)
               {
                 next_x_vals.push_back(previous_path_x[i]);
                 next_y_vals.push_back(previous_path_y[i]);
-                // cout<<"x, y "<<'\t'<<previous_path_x[i]<<'\t'<<previous_path_y[i]<<endl;
               }
 
-              // int last_index = previous_path_x.size() - 1;
-              int last_index = num_waypoints_from_previous_path-1;//ADDED
-              double latest_x = previous_path_x[last_index];
-              double latest_y = previous_path_y[last_index];
-              cout<<"latest x, y "<<latest_x<<'\t'<<latest_y<<endl;
-              double pen_x = car_x;//penultimate x value in the previous_path_x.
-              double pen_y = car_y;
+              int last_index = (prev_s.size() - previous_path_x.size()) + (num_waypoints_from_previous_path - 1);
+              double latest_s = prev_s[last_index];
+              double latest_d = prev_d[last_index];
+              double pen_s = car_s;
+              double pen_d = car_d;
               
-              if(num_waypoints_from_previous_path > 1)
+              for(int i = prev_s.size() - previous_path_x.size(); i<=last_index; i++)
               {
-                pen_x = previous_path_x[last_index - 1];
-                pen_y = previous_path_y[last_index - 1];
+                temp_s.push_back(prev_s[i]);
+                temp_d.push_back(prev_d[i]);
               }
-              cout<<"pen_x, pen_y "<<pen_x<<'\t'<<pen_y<<endl;
-              double latest_velocity = distance(latest_x, latest_y, pen_x, pen_y)/0.02;
 
+              if(last_index > 0)
+              {
+                pen_s = prev_s[last_index-1];
+                pen_d = prev_d[last_index-1];
+              }
+
+              double latest_velocity = distance(latest_s, latest_d, pen_s, pen_d)/timestep;
               double pen_velocity = latest_velocity;
-              if(num_waypoints_from_previous_path == 2)//ADDED
+              if(last_index == 1)
               {
-                pen_velocity = distance(pen_x, pen_y, car_x, car_y)/0.02;
+                pen_velocity = distance(pen_s, pen_d, car_s, car_d)/timestep;
               }
-              else if(num_waypoints_from_previous_path > 2)
+              else if(last_index > 1)
               {
-                pen_velocity = distance(pen_x, pen_y, previous_path_x[last_index - 2], previous_path_y[last_index - 2])/0.02;
-                cout<<"second last x,y "<<previous_path_x[last_index-2]<<'\t'<<previous_path_y[last_index-2]<<endl;
+                pen_velocity = distance(pen_s, pen_d, prev_s[last_index-2], prev_d[last_index-2])/timestep;
               }
-              cout<<"latest_velocity, pen_velocity "<<latest_velocity<<'\t'<<pen_velocity<<endl;
-              double latest_acceleration = (latest_velocity - pen_velocity)/0.02;
-              double latest_yaw = atan2(latest_y - pen_y, latest_x - pen_x);
-              cout<<"latest_acceleration, latest_yaw "<<latest_acceleration<<'\t'<<latest_yaw<<endl;
 
-              // vector<double> frenet_vel = getF_velocity(latest_x, latest_y, latest_velocity*cos(latest_yaw), latest_velocity * sin(latest_yaw), map_waypoints_x, map_waypoints_y, map_waypoints_dx, map_waypoints_dy);
-              vector<double> frenet_vel = getF_velocity(latest_x, latest_y, latest_yaw, latest_velocity*cos(latest_yaw), latest_velocity*sin(latest_yaw), map_waypoints_x, map_waypoints_y);
-              vector<double> end_path_frenet = getFrenet(latest_x, latest_y, latest_yaw, map_waypoints_x, map_waypoints_y);
-              latest_ego_state = {end_path_frenet[0], frenet_vel[0], latest_acceleration, end_path_frenet[1], frenet_vel[1], 0.0};
-              cout<<"frenet_velocity s,d "<<frenet_vel[0]<<'\t'<<frenet_vel[1]<<endl;
-              cout<<"end path frenet s,d "<<end_path_frenet[0]<<'\t'<<end_path_frenet[1]<<endl;
+              double latest_acceleration = (latest_velocity - pen_velocity)/timestep;
+              double latest_yaw = atan2(latest_d - pen_d, latest_s - pen_s);
+
+              latest_ego_state = {latest_s, latest_velocity*cos(latest_yaw), latest_acceleration*cos(latest_yaw), latest_d, latest_velocity*sin(latest_yaw), latest_acceleration*sin(latest_yaw)};
 
               //Now we will predict the states of the traffic vehicles at the time when the ego vehicle has completed the last trajectory.
-              double delta_t = num_waypoints_from_previous_path * 0.02;//time when trajectory is completed - present time.
+              double delta_t = num_waypoints * 0.02;//time when trajectory is completed - present time.
               for(int i = 0; i<sensor_fusion.size(); i++)
               {
                 if(sensor_fusion[i][6] > 13.0 || sensor_fusion[i][6] < 0.0 || fabs(double(sensor_fusion[i][5]) - latest_ego_state[0]) >= SEARCH_DISTANCE) continue; 
-                vector<double> l  = sensor_fusion[0];
+                vector<double> l  = sensor_fusion[i];
                 l[1]+= l[3]*delta_t;
                 l[2]+= l[4]*delta_t;
 
@@ -221,18 +217,20 @@ int main() {
                 latest_sensor_fusion.push_back(l);
               }
             }
-            cout<<"Latest ego state "<<latest_ego_state[0]<<'\t'<<latest_ego_state[1]<<'\t'<<latest_ego_state[2]<<'\t'<<latest_ego_state[3]<<endl;
-
+            // cout<<"Latest ego state "<<latest_ego_state[0]<<'\t'<<latest_ego_state[1]<<'\t'<<latest_ego_state[2]<<'\t'<<latest_ego_state[3]<<endl;
+            prev_s = temp_s;
+            prev_d = temp_d;
             //------------------------- 2. Initializing the map in the vehicle class which stores state information of all the vehicles.----------------------------------
             
 
             Vehicle vehicle(latest_ego_state);//s, s_dot, s_dot_dot, d, d_dot, d_dot_dot.
-  
+            cout<<"Updated State of traffic "<<endl;
             for(int i = 0; i<latest_sensor_fusion.size(); i++)
             {
               vector<double> l = latest_sensor_fusion[i];//id, x, y, vx, vy, s, d.
               vector<double> traffic_frenet_vel = getF_velocity(l[1], l[2], atan2(l[4], l[3]), l[3], l[4], map_waypoints_x, map_waypoints_y);
               vehicle.vehicles.insert(pair<int, vector<double>>(l[0],{l[5], traffic_frenet_vel[0], 0, l[6], traffic_frenet_vel[1], 0}));
+              cout<<l[0]<<'\t'<<l[5]<<'\t'<<l[6]<<'\t'<<traffic_frenet_vel[0]<<'\t'<<traffic_frenet_vel[1]<<endl;
             }
 
             // //--------------------------3. Creating a finite state machine and  deciding the next vehicle state based on the predictions--------------------------------
@@ -241,12 +239,12 @@ int main() {
             vector<vector<double>> trajectory = fsm.next_state(vehicle, current_state);
 //-------------------------END----------------
             // // 4. Generating a JMT between the start and goal states from the next state().
-            // generate_trajectory traj(time_for_maneuver);
+            generate_trajectory traj(time_for_maneuver);
 
             //-------------------------------CHANGE MADE----------------------------------------
-            // vector<vector<double>> coeffs = traj.generate_JMT(trajectory);
+            vector<vector<double>> coeffs = traj.generate_JMT(trajectory);
 
-            //-------TRAJECTORY DEBUGGING------------
+            // -------TRAJECTORY DEBUGGING------------
 
             // cout<<"TRAJECTORY:"<<endl;
             // cout<<"   start------------goal"<<endl;
@@ -264,77 +262,73 @@ int main() {
             //   cout<<endl;
             // }
 //---------------------------------------------------------------S
-            vector<vector<double>> path = get_new_waypoints(trajectory, vehicle.vehicles.find(ego_id)->second);
-            for(int i = 0; i<path[0].size(); i++)
-            // for(int i = 0; i<num_waypoints - num_waypoints_from_previous_path; i++)
-            {
-              prev_s.push_back(path[0][i]);
-              prev_d.push_back(path[1][i]);
-              vector<double> xy = getXY(path[0][i], path[1][i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
-              // cout<<"xy "<<xy[0]<<'\t'<<xy[1]<<endl;
-              next_x_vals.push_back(xy[0]);
-              next_y_vals.push_back(xy[1]);
-            }
-
+            
+//---------------This piece works good-------------------//
+            // vector<vector<double>> path = get_new_waypoints(trajectory, vehicle.vehicles.find(ego_id)->second);
+            // for(int i = 0; i<path[0].size(); i++)
+            // // for(int i = 0; i<num_waypoints - num_waypoints_from_previous_path; i++)
+            // {
+            //   // if(i>0 && path[0][i] <= check_value) continue;
+            //   // check_value = path[0][i];
+            //   // if(i < 100) cout<<"new s,d "<<path[0][i]<<'\t'<<path[1][i]<<endl;
+            //   prev_s.push_back(path[0][i]);
+            //   prev_d.push_back(path[1][i]);
+            //   vector<double> xy = getXY(path[0][i], path[1][i], map_waypoints_s, map_waypoints_x, map_waypoints_y);
+            //   // cout<<"xy "<<xy[0]<<'\t'<<xy[1]<<endl;
+            //   next_x_vals.push_back(xy[0]);
+            //   next_y_vals.push_back(xy[1]);
+            // }
+//------------------END-----------------------------------//
+          
 
             // cout<<"-----------Next vals---------------"<<endl;
             // for(int i = 0; i<next_x_vals.size(); i++) cout<<"xy "<<next_x_vals[i]<<'\t'<<next_y_vals[i]<<endl;
             // cout<<"next x vals size "<<next_x_vals.size()<<endl;
 
             // 5. creating waypoints on the above trajectory for the vehicle to follow.            
-            // double timestep = 0.02;
+            
             // int num_waypoints = (time_for_maneuver/timestep);
-            // vector<double> jmt_x;
-            // vector<double> jmt_y;
+            vector<double> jmt_x;
+            vector<double> jmt_y;
             //   //Storing JMT waypoints.
-            // // cout<<"-------------------------Printing new S and D---------------------------"<<endl;
+            // cout<<"-------------------------Printing new S and D---------------------------"<<endl;
             // for(double t = 0.0; t<=time_for_maneuver; t+=timestep)
-            // // for(int i = 1; i<= num_waypoints - num_waypoints_from_previous_path; i++)
-            // {
-            //   // double t = i*timestep;
-            //   vector<double> jmt_waypoint = generate_xy_for_trajectory(coeffs, t, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-            //   // cout<<"x,y "<<jmt_waypoint[0]<<'\t'<<jmt_waypoint[1]<<endl;
-            //   jmt_x.push_back(jmt_waypoint[0]);
-            //   jmt_y.push_back(jmt_waypoint[1]);
-
-            //   // vector<double> vel_and_acc = trajectory_vel_and_acc(coeffs, t);//Just for testing. In the beginning of the path, major acceleration is in the x direction. The velocity and acceleration are calcultaed in s and d space and assigned to acc_x and vel_x for rough approximation.
-            // }
+            for(int i = 1; i<= num_waypoints - num_waypoints_from_previous_path; i++)
+            {
+              double t = i*timestep;
+              vector<vector<double>> jmt_waypoint = generate_JMT_waypoints(coeffs, t, map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              // cout<<"s,d "<<jmt_waypoint[1][0]<<'\t'<<jmt_waypoint[1][1]<<endl;
+              jmt_x.push_back(jmt_waypoint[0][0]);
+              jmt_y.push_back(jmt_waypoint[0][1]);
+              prev_s.push_back(jmt_waypoint[1][0]);
+              prev_d.push_back(jmt_waypoint[1][1]);
+            }
 
             //   //Pushing JMT waypoints to next_vals after some processing like fitting a polynomial with them because map waypoints are very sparse so getXY does not yield good results.
             // // cout<<"-------------------------New Path starts--------------------------"<<endl;
             // int check_flag = 1;
             // double check_value = jmt_x[0];
-            // for(int i = 0; i<jmt_x.size(); i++)
-            // {
-            //   // if(i > 0 && jmt_x[i] <= check_value)
-            //   // {
-            //   //   continue;
-            //   //   // cout<<"index when decrement starts - "<<num_waypoints_from_previous_path + i<<endl;
-            //   //   // check_flag = 0;
-            //   // }
-            //   // check_value = jmt_x[i];
-            //   next_x_vals.push_back(jmt_x[i]);
-            //   next_y_vals.push_back(jmt_y[i]);
+            for(int i = 0; i<jmt_x.size(); i++)
+            {
+              // if(i > 0 && jmt_x[i] <= check_value)
+              // {
+              //   continue;
+              //   // cout<<"index when decrement starts - "<<num_waypoints_from_previous_path + i<<endl;
+              //   // check_flag = 0;
+              // }
+              // check_value = jmt_x[i];
+              next_x_vals.push_back(jmt_x[i]);
+              next_y_vals.push_back(jmt_y[i]);
             //   cout<<"x, y "<<'\t'<<jmt_x[i]<<'\t'<<jmt_y[i]<<endl;
-            // }
-            
-            // cout<<"car x,y "<<car_x<<'\t'<<car_y<<endl;
-            // cout<<"next initial x,y "<<next_x_vals[0]<<'\t'<<next_y_vals[0]<<endl;
-            // cout<<"next final x,y "<<next_x_vals[next_x_vals.size()-1]<<'\t'<<next_y_vals[next_y_vals.size()-1]<<endl;
-            // if(previous_path_y.size())
-            // {
-            //   cout<<"previous path initial x,y "<<previous_path_x[0]<<", "<<previous_path_y[0]<<endl;
-            //   cout<<"previous path last x,y "<<previous_path_x[previous_path_x.size() - 1]<<", "<<previous_path_y[previous_path_y.size() - 1]<<endl;
-
-            //   // vector<double> frenet_t_1 = getFrenet(car_x, car_y, car_yaw, map_waypoints_x, map_waypoints_y);
-            //   // cout<<"car s,d "<<frenet_t_1[0]<<", "<<frenet_t_1[1]<<endl;
-            //   cout<<"car x,y "<<car_x<<'\t'<<car_y<<endl;
-            // }
-            // double temp_yaw = atan2(next_y_vals[1] - next_y_vals[0], next_x_vals[1] - next_x_vals[0]);
-            // vector<double> frenet_t_2 = getFrenet(next_x_vals[0], next_y_vals[0], temp_yaw, map_waypoints_x, map_waypoints_y);
-
-            // cout<<"Next vals initial s,d "<<frenet_t_2[0]<<", "<<frenet_t_2[1]<<endl;
-            // cout<<"next vals initial x,y "<<next_x_vals[0]<<'\t'<<next_y_vals[0]<<endl;
+            }
+            if(previous_path_x.size() == 0)
+            {
+              cout<<"---------Printing First Path----------"<<endl;
+              for(int i = 0; i<next_x_vals.size(); i++)
+              {
+                cout<<"x,y "<<next_x_vals[i]<<'\t'<<next_y_vals[i]<<endl;
+              }
+            }
 
             json msgJson;            
           	msgJson["next_x"] = next_x_vals;

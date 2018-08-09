@@ -7,13 +7,13 @@ using namespace std;
 
 Vehicle::Vehicle(vector<double> ego_state)
 {
-	double acc_s = ego_state[2];
-	if(ego_state[1] == 0)
-	{
-		double velocity = min(MAX_ACCELERATION * dt, MAX_SPEED);
-		acc_s = (velocity - 0)/dt;
-	}
-	ego_state[2] = acc_s;
+	// double acc_s = ego_state[2];
+	// if(ego_state[1] == 0)
+	// {
+	// 	acc_s = MAX_ACCELERATION;
+	// 	double velocity = min(MAX_ACCELERATION * dt, MAX_SPEED);
+	// }
+	// ego_state[2] = acc_s;
 	vehicles[ego_id] = ego_state;
 }
 
@@ -22,8 +22,8 @@ Vehicle::~Vehicle(){}
 FSM::FSM() 
 {
 	// current_state = "KL";//Initial value for state - Keep Lane
-	// state_graph["KL"] = {"KL","PLCL","PLCR"};
-	state_graph["KL"] = {"KL"};
+	state_graph["KL"] = {"KL","PLCL","PLCR"};
+	// state_graph["KL"] = {"KL"};
 	state_graph["PLCL"] = {"KL","LCL"};
 	state_graph["LCL"] = {"KL","PLCL"};//back to back lane change can be done as a possible next state of lane change left is prepare lane change left.
 	state_graph["PLCR"] = {"KL","LCR"};
@@ -41,7 +41,7 @@ void Vehicle::predict()
 	{
 		if(it->first == ego_id) continue;
 		vector<double> vehicle_state = it->second;
-		vector<double> update = {vehicle_state[1] * dt + 0.5 * vehicle_state[2] *dt*dt, vehicle_state[2] * dt, 0, vehicle_state[4] * dt + 0.5 * vehicle_state[5] * dt *dt, vehicle_state[5] * dt, 0};//Although the traffic vehicles are assumed to be moving at a constant speed. I have included this to tinker with the code after the project.
+		vector<double> update = {vehicle_state[1] * dt, vehicle_state[1], 0, vehicle_state[4] * dt, vehicle_state[4], 0};//Although the traffic vehicles are assumed to be moving at a constant speed. I have included this to tinker with the code after the project.
 		std::transform(update.begin(), update.end(), vehicle_state.begin(), update.begin(), plus<double>());
 
 		for(int i = 0; i<update.size(); i++) if(fabs(update[i]) < 0.0001) update[i] = 0.0;//Approximating the extremely small floating point values to zero.
@@ -88,7 +88,8 @@ vector<double> Vehicle::get_kinematics(Vehicle &vehicle, int target_lane)
 	int vehicle_ahead_id = find_vehicle_ahead(target_lane);
 	int vehicle_behind_id = find_vehicle_behind(target_lane);
 
-	// cout<<"Vehicle Ahead/Behind ID "<<vehicle_ahead_id<<", "<<vehicle_behind_id<<endl;
+	// if(vehicle_ahead_id != ego_id) cout<<"Vehicle with ID "<<vehicle_ahead_id<<" is ahead."<<endl;
+	// if(vehicle_behind_id != ego_id) cout<<"Vehicle with ID "<<vehicle_behind_id<<" is behind"<<endl;
 
 	vector<double> new_kinematics;
 	vector<double> current_kinematics = vehicle.vehicles.find(ego_id)->second;
