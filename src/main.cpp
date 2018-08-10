@@ -110,8 +110,8 @@ int main() {
           	// Sensor Fusion Data, a list of all other cars on the same side of the road.
           	auto sensor_fusion = j[1]["sensor_fusion"];//returns a vector of strings
 
-            cout<<"-----------------"<<endl;
-            cout<<"Current State - "<<current_state<<endl;
+            // cout<<"-----------------"<<endl;
+            // cout<<"Current State - "<<current_state<<endl;
             // cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
 
             // cout<<"car x, y, yaw "<<car_x<<'\t'<<car_y<<'\t'<<car_yaw<<endl;
@@ -139,7 +139,7 @@ int main() {
             int prev_size = previous_path_x.size();
             int num_waypoints = 100;
             // int num_waypoints_from_previous_path = prev_size;            
-            int num_waypoints_from_previous_path = min(30, prev_size);
+            int num_waypoints_from_previous_path = min(20, prev_size);
             // cout<<"Num waypoints from previous path - "<<num_waypoints_from_previous_path<<endl;
 
             // cout<<"car s,d "<<car_s<<'\t'<<car_d<<endl;
@@ -224,13 +224,13 @@ int main() {
             
 
             Vehicle vehicle(latest_ego_state);//s, s_dot, s_dot_dot, d, d_dot, d_dot_dot.
-            cout<<"Updated State of traffic "<<endl;
+            // cout<<"Updated State of traffic "<<endl;
             for(int i = 0; i<latest_sensor_fusion.size(); i++)
             {
               vector<double> l = latest_sensor_fusion[i];//id, x, y, vx, vy, s, d.
               vector<double> traffic_frenet_vel = getF_velocity(l[1], l[2], atan2(l[4], l[3]), l[3], l[4], map_waypoints_x, map_waypoints_y);
               vehicle.vehicles.insert(pair<int, vector<double>>(l[0],{l[5], traffic_frenet_vel[0], 0, l[6], traffic_frenet_vel[1], 0}));
-              cout<<l[0]<<'\t'<<l[5]<<'\t'<<l[6]<<'\t'<<traffic_frenet_vel[0]<<'\t'<<traffic_frenet_vel[1]<<endl;
+              // cout<<l[0]<<'\t'<<l[5]<<'\t'<<l[6]<<'\t'<<traffic_frenet_vel[0]<<'\t'<<traffic_frenet_vel[1]<<endl;
             }
 
             // //--------------------------3. Creating a finite state machine and  deciding the next vehicle state based on the predictions--------------------------------
@@ -321,14 +321,14 @@ int main() {
               next_y_vals.push_back(jmt_y[i]);
             //   cout<<"x, y "<<'\t'<<jmt_x[i]<<'\t'<<jmt_y[i]<<endl;
             }
-            if(previous_path_x.size() == 0)
-            {
-              cout<<"---------Printing First Path----------"<<endl;
-              for(int i = 0; i<next_x_vals.size(); i++)
-              {
-                cout<<"x,y "<<next_x_vals[i]<<'\t'<<next_y_vals[i]<<endl;
-              }
-            }
+            // if(previous_path_x.size() == 0)
+            // {
+            //   cout<<"---------Printing First Path----------"<<endl;
+            //   for(int i = 0; i<next_x_vals.size(); i++)
+            //   {
+            //     cout<<"x,y "<<next_x_vals[i]<<'\t'<<next_y_vals[i]<<endl;
+            //   }
+            // }
 
             json msgJson;            
           	msgJson["next_x"] = next_x_vals;
@@ -380,6 +380,4 @@ int main() {
   h.run();
 }
 //TO DO:
-// Not able to use section of previous path and not able to compliment it with generating fewer points using the JMT trajectory.
-// 1. Implement spline either using the JMT generated waypoints or generate using the source and destination and few other points.
-// 2. Then Use section of previous path.
+//1. Lane Change not working.

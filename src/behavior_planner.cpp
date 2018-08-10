@@ -41,7 +41,7 @@ void Vehicle::predict()
 	{
 		if(it->first == ego_id) continue;
 		vector<double> vehicle_state = it->second;
-		vector<double> update = {vehicle_state[1] * dt, vehicle_state[1], 0, vehicle_state[4] * dt, vehicle_state[4], 0};//Although the traffic vehicles are assumed to be moving at a constant speed. I have included this to tinker with the code after the project.
+		vector<double> update = {vehicle_state[1] * dt, 0, 0, vehicle_state[4] * dt, 0, 0};//Although the traffic vehicles are assumed to be moving at a constant speed. I have included this to tinker with the code after the project.
 		std::transform(update.begin(), update.end(), vehicle_state.begin(), update.begin(), plus<double>());
 
 		for(int i = 0; i<update.size(); i++) if(fabs(update[i]) < 0.0001) update[i] = 0.0;//Approximating the extremely small floating point values to zero.
@@ -88,9 +88,16 @@ vector<double> Vehicle::get_kinematics(Vehicle &vehicle, int target_lane)
 	int vehicle_ahead_id = find_vehicle_ahead(target_lane);
 	int vehicle_behind_id = find_vehicle_behind(target_lane);
 
-	// if(vehicle_ahead_id != ego_id) cout<<"Vehicle with ID "<<vehicle_ahead_id<<" is ahead."<<endl;
-	// if(vehicle_behind_id != ego_id) cout<<"Vehicle with ID "<<vehicle_behind_id<<" is behind"<<endl;
-
+	// vector<double> ahead_vehicle = vehicle.vehicles.find(vehicle_ahead_id)->second;
+	// vector<double> behind_vehicle = vehicle.vehicles.find(vehicle_behind_id)->second;
+	// if(vehicle_ahead_id != ego_id) 
+	// {
+	// 	cout<<"Vehicle Ahead ID, Lane, Delta s "<<vehicle_ahead_id<<'\t'<<int(ahead_vehicle[3]/4.0)<<'\t'<<ahead_vehicle[0] - vehicle.vehicles.find(ego_id)->second[0]<<endl;	
+	// }
+	// if(vehicle_behind_id != ego_id) 
+	// {
+	// 	cout<<"Vehicle Behind ID, Delta s "<<vehicle_behind_id<<'\t'<<int(behind_vehicle[3]/4.0)<<'\t'<<vehicle.vehicles.find(ego_id)->second[0] - behind_vehicle[0]<<endl;
+	// }
 	vector<double> new_kinematics;
 	vector<double> current_kinematics = vehicle.vehicles.find(ego_id)->second;
 
@@ -115,7 +122,7 @@ vector<double> Vehicle::get_kinematics(Vehicle &vehicle, int target_lane)
 	}
 	else//keeps a check on both max acceleration and max speed.
 	{	
-		new_velocity = min(MAX_ACCELERATION * dt, MAX_SPEED);
+		new_velocity = min(MAX_ACCELERATION * dt + s_dot, MAX_SPEED);
 	}
 	
 	if(new_velocity < 0) 
@@ -184,18 +191,13 @@ vector<vector<double>> FSM::next_state(Vehicle &vehicle, string &current_state)
 
 	vehicle.predict();
 	// cout<<"In the next state function:"<<endl;
-
+	cout<<"Current State - "<<current_state<<endl;
 	for(int i = 0; i<successors.size(); i++)
 	{	
 		string goal_state = successors[i];
-		// cout<<"Successor - "<<goal_state<<endl;
+		cout<<"Successor - "<<goal_state<<endl;
+		// cout<<"------Printing Information About Traffic Vehicles-------"<<endl;
 		find_goal_pose(vehicle, current_state, goal_state);
-		if(vehicle.predictions.count(ego_id) == 0) 
-		{
-			// cout<<"Vehicle outside of the desired lanes."<<endl;
-
-			continue;
-		}
 		double total_cost = calculate_cost(vehicle);
 		if(total_cost < min_cost) 
 		{
@@ -206,14 +208,18 @@ vector<vector<double>> FSM::next_state(Vehicle &vehicle, string &current_state)
 		costs[goal_state] = total_cost;
 		vehicle.predictions.erase(ego_id);
 	}
-	// cout<<"states cost -------------"<<endl;
-	// map<string,double>::iterator it = costs.begin();
-	// for(it; it != costs.end(); ++it)
-	// {
-	// 	// cout<<"State name, cost - "<<it->first<<", "<<it->second<<endl;
-	// }
-	// cout<<"current_state - "<<current_state<<endl;
-	// cout<<"Final state chosen - "<<min_cost_state<<endl;
+	cout<<"Final State - "<<min_cost_state<<endl;
+	if(current_state.compare(min_cost_state))//When they do not match.
+	{
+		cout<<"---------States Changed-----------"<<endl;
+		cout<<"current_state - "<<current_state<<endl;
+		map<string,double>::iterator it = costs.begin();
+		for(it; it != costs.end(); ++it)
+		{
+			cout<<"State name, cost - "<<it->first<<", "<<it->second<<endl;
+		}
+		cout<<"Final state chosen - "<<min_cost_state<<endl;
+	}
 	if(costs.size() == 0) cout<<"All successors were evaluated to be infeasible. There is something wrong with the code."<<endl;
 	current_state = min_cost_state;
 	trajectory.push_back(min_cost_trajectory);

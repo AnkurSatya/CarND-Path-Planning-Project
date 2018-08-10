@@ -11,14 +11,14 @@ using namespace std;
 
 double sigmoid(double x)
 {
-	return 1 - (1.0/(1+exp(-x)));
+	return (2.0/(1+exp(-x)));
 }
 
 //cost for not driving at the maximum possible traffic speed and not driving in the fastest lane.
 double inefficiency_cost(Vehicle &vehicle)
 {
 	// if(vehicle.predictions.count(ego_id) == 0) return MAX_COST;//When a successor of a state leads to an infeasible trajectory.
-
+	if(vehicle.predictions.find(ego_id)->second[1] > MAX_SPEED) return 1.0;
 	vector<double> lane_speed(NUM_LANES,-1.0);
 	map<int, vector<double>>::iterator it = vehicle.predictions.begin();
 	for(it; it != vehicle.predictions.end(); ++it)
@@ -55,24 +55,29 @@ double buffer_distance_cost(Vehicle &vehicle)
 			if(int(it->second[3]/4) == ego_lane && it->second[0] > ego_s) min_distance = min(min_distance, it->second[0] - ego_s);
 		}
 	}
-
-	double cost = min(1.0,abs(min_distance - BUFFER_DISTANCE)); //The cost = |x-3| bounded between 0 and 1.
+	if(min_distance < BUFFER_DISTANCE) return 1.0;
+	double cost = min(1.0,(min_distance - BUFFER_DISTANCE)/min_distance); //The cost = |x-3| bounded between 0 and 1.
 	return cost;
 }
 
-double max_speed_cost(Vehicle &vehicle)
+double speed_cost(Vehicle &vehicle)
 {
+	if(vehicle.predictions.find(ego_id)->second[1] > MAX_SPEED) return 1.0;
 	return (MAX_SPEED - vehicle.predictions.find(ego_id)->second[1])/MAX_SPEED;
 }
 
-double max_acceleration_cost(Vehicle &vehicle)
+double acceleration_cost(Vehicle &vehicle)
 {
+	if(vehicle.predictions.find(ego_id)->second[2] > MAX_ACCELERATION) return MAX_COST;
 	return (MAX_ACCELERATION - vehicle.predictions.find(ego_id)->second[2]);
 }
 
 double calculate_cost(Vehicle &vehicle)
 {
-	return 100*sigmoid(inefficiency_cost(vehicle) + buffer_distance_cost(vehicle) + max_speed_cost(vehicle) +max_acceleration_cost(vehicle));
+	if(vehicle.predictions.count(ego_id) == 0) return 1.0;
+	// cout<<"Costs - "<<endl;
+	// cout<<"inefficiency_cost - "<<inefficiency_cost(vehicle)<<endl;
+	return sigmoid(0*inefficiency_cost(vehicle) + buffer_distance_cost(vehicle) + 0*speed_cost(vehicle) +0*acceleration_cost(vehicle));
 }
 
 #endif
