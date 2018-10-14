@@ -3,6 +3,8 @@
 #include "Eigen-3.3/Eigen/Core"
 #include "Eigen-3.3/Eigen/QR"
 #include "spline/src/spline.h"
+#include "trajectory_planner.h"
+#include "behavior_planner.h"
 using namespace std;
 
 // For converting back and forth between radians and degrees.
@@ -23,6 +25,22 @@ string hasData(string s) {
     return s.substr(b1, b2 - b1 + 2);
   }
   return "";
+}
+
+// double MPH_to_mps(double v)
+// {
+// 	return v * 1.60934 * 5.0/18.0;
+// }
+double frenet_distance(double s1, double d1, double s2, double d2)
+{
+	double distance;
+	double s_diff = s1-s2;
+	if(abs(s1-s2) > 500.0)//comparing to a large number.
+	{
+		s_diff = fmod(max(s1, max_s - s2), max_s) + min(s1, max_s - s2);
+	}
+	distance = sqrt(s_diff*s_diff+(d1-d2)*(d1-d2));
+	return distance;
 }
 
 double distance(double x1, double y1, double x2, double y2)
@@ -203,32 +221,32 @@ vector<double> getFrenet(double x, double y, double theta, const vector<double> 
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-	//This is a very poorly designed mathematical formulation. The approximation is not fixed and increases with the curvature, map waypoint and vehicle position. Problem can be solved by using splines to generate more waypoints.
-	int prev_wp = -1;
+// vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+// {
+// 	//This is a very poorly designed mathematical formulation. The approximation is not fixed and increases with the curvature, map waypoint and vehicle position. Problem can be solved by using splines to generate more waypoints.
+// 	int prev_wp = -1;
 
-	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
-	{
-		prev_wp++;
-	}
+// 	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
+// 	{
+// 		prev_wp++;
+// 	}
 
-	int wp2 = (prev_wp+1)%maps_x.size();
+// 	int wp2 = (prev_wp+1)%maps_x.size();
 
-	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
-	// the x,y,s along the segment
-	double seg_s = (s-maps_s[prev_wp]);
+// 	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
+// 	// the x,y,s along the segment
+// 	double seg_s = (s-maps_s[prev_wp]);
 
-	double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
-	double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
+// 	double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
+// 	double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
 
-	double perp_heading = heading-pi()/2;
+// 	double perp_heading = heading-pi()/2;
 
-	double x = seg_x + d*cos(perp_heading);
-	double y = seg_y + d*sin(perp_heading);
+// 	double x = seg_x + d*cos(perp_heading);
+// 	double y = seg_y + d*sin(perp_heading);
 
-	return {x,y};
-}
+// 	return {x,y};
+// }
 
 // vector<double> getXY(double s, double d, vector<double> &maps_s, vector<double> &maps_x, vector<double> &maps_y, vector<double> &maps_dx, vector<double> &maps_dy)
 // {
@@ -279,21 +297,6 @@ vector<double> getF_velocity(double x, double y, double theta, double v_x, doubl
 // 	return {s_dot, d_dot};
 
 // }
-vector<vector<double>> generate_JMT_waypoints(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-	//T represents the time for completing this trajectory.
-	double s = 0.0;// s is not initialized with start_s because the coeffs already contain that information.
-	double d = 0.0;
-	for(int i = 0; i<coeffs[0].size(); i++)
-	{
-		s+= coeffs[0][i] * pow(T,i);
-		d+= coeffs[1][i] * pow(T,i);
-	}
-	// cout<<"s, d "<<s<<'\t'<<d<<endl;
-	vector<double> XY = getXY(s,d,maps_s, maps_x, maps_y);
-	// cout<<"get XY "<<XY[0]<<'\t'<<XY[1]<<endl;
-	return {XY,{s,d}};
-}
 
 // vector<double> trajectory_vel_and_acc(vector<vector<double>> coeffs, double t)
 // {
@@ -317,7 +320,7 @@ vector<vector<double>> upsample_map_waypoints(vector<double> maps_x, vector<doub
 	tk::spline s_to_y = generate_spline(maps_s, maps_y);
 
 	vector<double> x_upsampled, y_upsampled, s_upsampled;
-	for(double i = 0; i<=max_s; i++)// resampling every 1 meter.
+	for(double i = 0; i<=max_s; i+=1.0)// resampling every 1 meter.
 	{	
 		x_upsampled.push_back(s_to_x(i));
 		y_upsampled.push_back(s_to_y(i));
@@ -392,4 +395,46 @@ vector<vector<double>> upsample_map_waypoints(vector<double> maps_x, vector<doub
 
 // 	// cout<<"no. of new waypoints - "<<s_waypoints.size()<<endl;
 // 	return {s_waypoints, d_waypoints};
+// }
+
+// vector<vector<double>> test_behavior_planner(vector<double>ego_state, vector<vector<double>> sensor_fusion)
+// {
+// 	vector<vector<double>> trajectory;
+// 	trajectory.push_back(ego_state);
+// 	double min_distance = max_s;
+// 	double vehicle_ahead_id = -1;
+
+// 	vector<double> new_state(ego_state.size(), 0.0);
+// 	new_state[0] = ego_state[0];
+// 	for(int i = 0; i<sensor_fusion.size(); i++)
+// 	{
+// 		if(int(sensor_fusion[i][6]/4) == int(ego_state[3]/4))
+// 		{
+// 			if(sensor_fusion[i][5] - ego_state[0] <= SEARCH_DISTANCE && sensor_fusion[i][5] > ego_state[0] && min_distance > (sensor_fusion[i][5] - ego_state[0]))
+// 			{
+// 				min_distance = sensor_fusion[i][5] - ego_state[0];
+// 				vehicle_ahead_id = i; 
+// 			}
+// 		}
+// 	}
+// 	if(vehicle_ahead_id != -1)
+// 	{
+// 		new_state[1] = (sensor_fusion[vehicle_ahead_id][5] - BUFFER_DISTANCE - ego_state[0] - 0.5*ego_state[2]*dt*dt)/dt + pow(pow(sensor_fusion[vehicle_ahead_id][3],2)+pow(sensor_fusion[vehicle_ahead_id][4],2),0.5); 
+// 		new_state[1] = min(MAX_SPEED, new_state[1]);
+// 		new_state[2] = min(MAX_ACCELERATION, (new_state[1] - ego_state[1])/dt);
+// 		new_state[0]+= new_state[1]*dt + 0.5*new_state[2]*dt*dt;
+// 		cout<<"Vehicle ahead id, distance from ego "<<vehicle_ahead_id<<", "<<sensor_fusion[vehicle_ahead_id][5] - ego_state[0]<<endl;
+// 	}
+
+// 	else
+// 	{
+// 		new_state[2] = MAX_ACCELERATION;
+// 		new_state[1] = min(MAX_SPEED, new_state[2]*dt);
+// 		new_state[0]+= new_state[1]*dt + 0.5*new_state[2]*dt*dt;
+// 		cout<<"No vehicle ahead"<<endl;
+// 	}
+// 	new_state[3] = ego_state[3];
+// 	trajectory.push_back(new_state);
+
+// 	return trajectory;
 // }

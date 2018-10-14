@@ -6,6 +6,7 @@
 #include <string>
 #include <map>
 #include "constants.h"
+#include "trajectory_planner.h"
 
 using namespace std;
 
@@ -25,7 +26,7 @@ public:
 	void predict();
 	int find_vehicle_ahead(int target_lane);
 	int find_vehicle_behind(int target_lane);
-	vector<double> get_kinematics(Vehicle &vehicle, int target_lane);
+	vector<double> get_kinematics(Vehicle &vehicle, int target_lane, string goal_state);
 };
 
 class FSM
@@ -41,12 +42,14 @@ public:
 	string current_state;
 
 	//returns the trajectory for transition to the next state to the Trajectory Planner Module.
-	vector<vector<double>> next_state(Vehicle &vehicle, string &current_state);
+	vector<vector<double>> next_state(Vehicle &vehicle, string &current_state, int &current_lane);
+	vector<vector<vector<double>>> generate_multiple_goal_states(vector<vector<double>> original_state, int num_states = 1, double std_dev_s = 0.0, double std_dev_d = 0.0);
+	vector<vector<vector<double>>> best_state_waypoints(vector<vector<double>> original_goal_state, Vehicle &vehicle, generate_trajectory traj, vector<vector<vector<double>>> goal_states, vector<double> map_waypoints_s, vector<double> map_waypoints_x, vector<double> map_waypoints_y, int num_waypoints, int num_waypoints_from_previous_path, string goal_state_name);
 
 	//Generates trajectory for transition to a input state. 
 	//Returns within the next_state function for cost evaluation.
 	// It should include the present state as the first state.
-	void find_goal_pose(Vehicle &vehicle, string start_state, string goal_state);
+	int find_goal_pose(Vehicle &vehicle, string start_state, string goal_state, int target_lane);
 
 	//Evaluates the cost for transition to the next state.
 	double evaluate_cost();

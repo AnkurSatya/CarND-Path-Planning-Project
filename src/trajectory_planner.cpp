@@ -1,8 +1,8 @@
 #include "trajectory_planner.h"
 
-generate_trajectory::generate_trajectory(double time_for_maneuver)
+generate_trajectory::generate_trajectory(double time)
 {
-	T = time_for_maneuver;
+	T = time;
 }
 
 generate_trajectory::~generate_trajectory(){}
@@ -47,4 +47,47 @@ vector<vector<double>> generate_trajectory::generate_JMT(vector<vector<double>> 
 		}
 	}
 	return coeffs;
+}
+
+vector<vector<double>> generate_trajectory::generate_JMT_waypoints(vector<vector<double>> coeffs, double T, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+{
+	//T represents the time for completing this trajectory.
+	double s = 0.0;// s is not initialized with start_s because the coeffs already contain that information.
+	double d = 0.0;
+	for(int i = 0; i<coeffs[0].size(); i++)
+	{
+		s+= coeffs[0][i] * pow(T,i);
+		d+= coeffs[1][i] * pow(T,i);
+	}
+
+	s = fmod(s, max_s);
+	vector<double> XY = getXY(s,d,maps_s, maps_x, maps_y);
+	return {XY,{s,d}};
+}
+
+vector<double> generate_trajectory::getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
+{
+	//This is a very poorly designed mathematical formulation. The approximation is not fixed and increases with the curvature, map waypoint and vehicle position. Problem can be solved by using splines to generate more waypoints.
+	int prev_wp = -1;
+
+	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
+	{
+		prev_wp++;
+	}
+
+	int wp2 = (prev_wp+1)%maps_x.size();
+
+	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
+	// the x,y,s along the segment
+	double seg_s = (s-maps_s[prev_wp]);
+
+	double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
+	double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
+
+	double perp_heading = heading-M_PI/2;
+
+	double x = seg_x + d*cos(perp_heading);
+	double y = seg_y + d*sin(perp_heading);
+
+	return {x,y};
 }
